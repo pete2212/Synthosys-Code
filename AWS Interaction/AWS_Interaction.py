@@ -25,7 +25,8 @@
 import time
 import boto
 import boto.ec2
-
+import re
+import os
 
 class AWSInteraction:
 	def uploadAWS(self, ifname = "", ofname = "", foldername = "", permissions = "private" ):
@@ -50,7 +51,24 @@ class AWSInteraction:
 		print "\n"
 		
 		return
-	
+		
+		
+	def checkSysStatus(self, instance ):
+		time.sleep(120)
+		out = instance.get_console_output( )
+		m = re.search('([0-9a-f][0-9a-f]:){15}[0-9a-f][0-9a-f]', str(out.output) )
+		os.popen( "ssh-keyscan %s 2>/dev/null > host.key" % instance.public_dns_name  )
+		os.popen( "ssh-keygen -q -R %s" % instance.public_dns_name )
+		os.popen( "ssh-keygen -q -H -f host.key" )
+		os.popen( "cat host.key >> ~/.ssh/known_hosts" )
+		#ignore for now, checking validity of host key
+		#os.popen( "ssh-keygen -lf host.key > host.fingerprint" )
+		#os.popen( "read len ACTUAL_FINGERPRINTS host rsa < host.fingerprint" )
+		#os.popen( 'echo "Actual fingerprints are $ACTUAL_FINGERPRINTS"' )
+		
+		#print "Actual fingerprints are $ACTUAL_FINGERPRINTS"
+		
+		
 	def checkKeyPair(self, keypair_name, public_key_file):
 		fp = open(public_key_file)
 		material = fp.read()
@@ -71,8 +89,9 @@ class AWSInteraction:
 			
 		
 	def startEC2Instance(self, 
-						 ami="ami-305b8759", 
-						 key_name="automation-key2",
+						 #ami="ami-305b8759", 
+						 ami="ami-2727f84e",
+						 key_name="automation-key3",
 						 instance_type="t1.micro",
 						 group_name = "open5",
 						 key_extension=".pem",
@@ -117,7 +136,7 @@ class AWSInteraction:
                                     security_groups=[group_name],
                                     instance_type=instance_type,
                                     user_data=user_data)
-                                    
+                           
 		instance = reservation.instances[0]
 		
 		print 'waiting for instance to start'
@@ -129,12 +148,15 @@ class AWSInteraction:
 		print "done"
 		
 		print "DNS = " + str(instance.public_dns_name)
+		#instance.use_ip("23.21.137.252")
 		
 		instance.add_tag( tag )	
+			
+		time.sleep(10)
+		self.checkSysStatus(instance)
 		
 		return instance.public_dns_name
 	
-	#def uploadToEC2( self, fname, dns_name )
 		
 		
 	#from cookbook
@@ -168,7 +190,7 @@ class AWSInteraction:
 			creds = (boto.config.get('Credentials', 'aws_access_key_id'),
 					 boto.config.get('Credentials', 'aws_secret_access_key'))
 			accounts = {'main' : creds}
-			print creds
+
 		running_instances = {}
 		for account_name in accounts:
 			running_instances[account_name] = {}
@@ -184,7 +206,7 @@ class AWSInteraction:
 				if instances:
 					running_instances[account_name][region.name] = instances
 		if not quiet:
-			self.printRunningInstances(running_instances)
+			self.printRunningInstances(running_instances)				
 		return running_instances
 
 	def terminateInstances(self, instanceId):
@@ -198,7 +220,8 @@ class AWSInteraction:
 					print '\t\t\tAn %s instance: %s' % (instance.instance_type,
 														instance.id)
 					print '\t\t\t\tTags=%s' % instance.tags	
-					print '\nTerminating instance "%s"' % instance.id
+					print '\nTerminating instance "%s"' % instance.id				
+					
 					ret = ec2.terminate_instances( str(instance.id) )
 					print "Terminated instance %s" % ret
 		

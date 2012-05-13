@@ -30,26 +30,55 @@ import os
 
 class AWSInteraction:
 
+    def __init__(self, bucket=None):
+        """ 
+        Args: 
+            bucket: if bucket exists w/o permission, raises boto error.
+                "new" means create new folder (smetrics_x) | x=time
+                default: smetrics_default
+
+        Returns: No current return.
+        Raises: No current Error handling.
+        """
+        if not bucket:
+            self.bucket = "smetrics_default"
+        elif bucket == "new":
+            self.bucket = "smetrics_" + str(time.time())
+        else:
+            self.bucket = bucket        
+
     # TODO(peter): Add testing components.  Remove unnecessary stuff.
-    def uploadAWS(self, ifname=None, ofname=None, 
-                  foldername=None, permissions="private"):
-        if not foldername:
-            curTime = time.time()
-            #add current time in seconds to end of string for unique bucketname
-            foldername = "s3_connect_" + str(curTime) 
-        if not ofname:
-            ofname = "default/default_file"
-        if not ifname:
-            ifname = "/home/ptr/Documents/default_file.txt"
+    def uploadAWS(self, file, key=None, bucket=None, 
+                  permission="authenticated-read", debug=False):
+        """Upload a file from the local server to AWS
+
+        Args:
+            file: the file to be transferred
+            key: the location of the file on S3.  
+                default: to be the same as file.
+            bucket: specified bucket name.
+                default: smetrics_default
+            permission: sets the ACL
+                default: authenticated-read
+                other options: public-read, public-read-write, private
+
+        Returns: No current return.
+        Raises: No current Error handling.
+        """
+        if not key:
+            key = file
+        if not bucket:
+            bucket = self.bucket
 
         s3 = boto.connect_s3()	
-        bucket = s3.create_bucket(foldername)     
-        key = bucket.new_key(str(ofname))
-        key.set_contents_from_filename(str(ifname))
-        key.set_acl('private')
-        print "Setup s3 connection, created new bucket with name" 
-        print foldername
-        print ""
+        b = s3.create_bucket(bucket)
+        k = bucket.new_key(key)
+        k.set_contents_from_filename(file)
+        k.set_acl(permission)
+        if debug:
+            print "Setup s3 connection, created new bucket with name" 
+            print foldername
+            print ""
         return
 
     def checkSysStatus(self, instance):
@@ -76,11 +105,11 @@ class AWSInteraction:
             ec2 = region.connect()
             try:
                 key = ec2.get_all_key_pairs(keynames=[keypair_name])[0]
-                print 'Keypair(%s) already exists in %s' % 
+                print 'Keypair(%s) already exists in %s' % \
                        (keypair_name, region.name)
             except ec2.ResponseError, e:
                 if e.code == 'InvalidKeyPair.NotFound':
-                    print 'Importing keypair(%s) to %s' % 
+                    print 'Importing keypair(%s) to %s' % \
                           (keypair_name, region.name)
             ec2.import_key_pair(keypair_name, material)
 
@@ -139,7 +168,7 @@ class AWSInteraction:
             for region_name in d:
                 print '\t\tRegion: %s' % region_name
                 for instance in d[region_name]:
-                    print '\t\t\tAn %s instance: %s' % 
+                    print '\t\t\tAn %s instance: %s' % \
                           (instance.instance_type, instance.id)
                     print '\t\t\t\tTags=%s' % instance.tags	
 
@@ -187,7 +216,7 @@ class AWSInteraction:
             for region_name in d:
                 print '\t\tRegion: %s' % region_name
                 for instance in d[region_name]:
-                    print '\t\t\tAn %s instance: %s' % 
+                    print '\t\t\tAn %s instance: %s' % \
                           (instance.instance_type, instance.id)
                     print '\t\t\t\tTags=%s' % instance.tags	
                     print '\nTerminating instance "%s"' % instance.id

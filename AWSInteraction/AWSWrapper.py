@@ -63,7 +63,7 @@ class AWSInteraction:
             override: allow files to be overwritten?  
                 otherwise check size/time before overwritting happens
 
-        Returns: No current return.
+        Returns: key associated with upload
         Raises: No current Error handling.
         """
         if not key: key = file
@@ -87,6 +87,7 @@ class AWSInteraction:
                 k.set_acl(permission)
                 if debug: print "[uploaded]",
         if debug: print ""
+        return k
 
     def uploadS3_path(self, dir, recursive=True, **kwargs):
         """Uploads a path (and its contents) to S3

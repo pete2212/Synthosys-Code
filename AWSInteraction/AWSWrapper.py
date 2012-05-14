@@ -40,16 +40,14 @@ class AWSInteraction:
         Returns: No current return.
         Raises: No current Error handling.
         """
-        if not bucket:
-            self.bucket = "smetrics_default"
-        elif bucket == "new":
-            self.bucket = "smetrics_" + str(time.time())
-        else:
-            self.bucket = bucket        
+        if not bucket: self.bucket = "smetrics_default"
+        elif bucket == "new": self.bucket = "smetrics_" + str(time.time())
+        else: self.bucket = bucket        
+        self.s3 = boto.connect_s3()	
 
     # TODO(peter): Add testing components.  Remove unnecessary stuff.
-    def uploadAWS(self, file, key=None, bucket=None, 
-                  permission="authenticated-read", debug=False):
+    def uploadS3(self, file, key=None, bucket=None, path=None,
+                 permission="authenticated-read", debug=False, override=False):
         """Upload a file from the local server to AWS
 
         Args:
@@ -58,28 +56,53 @@ class AWSInteraction:
                 default: to be the same as file.
             bucket: specified bucket name.
                 default: smetrics_default
+            path: a location outside of the root directory
             permission: sets the ACL
                 default: authenticated-read
                 other options: public-read, public-read-write, private
+            override: allow files to be overwritten?  
+                otherwise check size/time before overwritting happens
 
         Returns: No current return.
         Raises: No current Error handling.
         """
-        if not key:
-            key = file
-        if not bucket:
-            bucket = self.bucket
+        if not key: key = file
+        if not bucket: bucket = self.bucket
+        if path: 
+            key = "{path}/{file}".format(path=path, file=key)
 
-        s3 = boto.connect_s3()	
-        b = s3.create_bucket(bucket)
-        k = bucket.new_key(key)
-        k.set_contents_from_filename(file)
-        k.set_acl(permission)
-        if debug:
-            print "Setup s3 connection, created new bucket with name" 
-            print foldername
-            print ""
-        return
+        if debug: print "S3:", bucket, file, key,
+        if os.path.isfile(file):
+            b = self.s3.create_bucket(bucket)
+            # must get file to get its attributes
+            k = b.get_key(key)     
+            # if size or time parameters change or key doesn't exist
+            if override or not k or not k.exists() or \
+               str(os.path.getsize(file)) != k.get_metadata("size") or \
+               str(os.path.getmtime(file)) > k.get_metadata("time"):
+                k = b.new_key(key)
+                k.set_metadata("size", str(os.path.getsize(file)))
+                k.set_metadata("time", str(os.path.getmtime(file)))
+                k.set_contents_from_filename(file)
+                k.set_acl(permission)
+                if debug: print "[uploaded]",
+        if debug: print ""
+
+    def uploadS3_path(self, dir, recursive=True, **kwargs):
+        """Uploads a path (and its contents) to S3
+
+        Args:
+            dir: the directory to be inspected
+            recursive: allows recursive searching of directory
+        Returns: No current return.
+        Raises: No current Error handling.
+        """
+        for x in os.listdir(dir):
+            obj = "{dir}/{file}".format(dir=dir, file=x)
+            if os.path.isfile(obj):
+                self.uploadS3(file=obj, **kwargs)
+            elif recursive:
+                self.uploadS3_path(dir=obj, recursive=recursive, **kwargs)
 
     def checkSysStatus(self, instance):
         time.sleep(120)

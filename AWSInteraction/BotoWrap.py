@@ -28,7 +28,7 @@ import re
 import os
 
 
-class AWSInteraction:
+class BotoWrap:
 
     def __init__(self, bucket=None):
         """ 
@@ -44,8 +44,22 @@ class AWSInteraction:
         elif bucket == "new": self.bucket = "smetrics_" + str(time.time())
         else: self.bucket = bucket        
         self.s3 = boto.connect_s3()	
+        self.key = None
 
-    # TODO(peter): Add testing components.  Remove unnecessary stuff.
+    def getS3key(self, key, bucket=None):
+        """Get corresponding S3 key
+
+        Args:
+            key: in S3 vocabulary, the key accesses the S3 data
+            bucket: specified S3 bucket name (else: default)
+
+        Returns: key for further manipulations
+        """
+        if not bucket: bucket = self.bucket
+        b = self.s3.create_bucket(bucket)
+        k = b.get_key(key)
+        return k
+
     def uploadS3(self, file, key=None, bucket=None, path=None,
                  permission="authenticated-read", debug=False, override=False):
         """Upload a file from the local server to AWS
@@ -66,6 +80,20 @@ class AWSInteraction:
         Returns: key associated with upload
         Raises: No current Error handling.
         """
+        def overrideIt(k):
+            # file worth overriding?
+            # override and file should be static global variables
+            if override: return True 
+            if not k: return True
+            if not k.exists(): return True
+            # if size or time parameters change or key doesn't exist
+            if str(os.path.getsize(file)) != k.get_metadata("size") or \
+               str(os.path.getmtime(file)) > k.get_metadata("time"):
+                return True
+            return False
+
+        # TODO(ron): if key contains invalid characters (unicode). 
+        #            that creates problems with rendering buckets.  deal!
         if not key: key = file
         if not bucket: bucket = self.bucket
         if path: 
@@ -77,9 +105,7 @@ class AWSInteraction:
             # must get file to get its attributes
             k = b.get_key(key)     
             # if size or time parameters change or key doesn't exist
-            if override or not k or not k.exists() or \
-               str(os.path.getsize(file)) != k.get_metadata("size") or \
-               str(os.path.getmtime(file)) > k.get_metadata("time"):
+            if overrideIt(k):
                 k = b.new_key(key)
                 k.set_metadata("size", str(os.path.getsize(file)))
                 k.set_metadata("time", str(os.path.getmtime(file)))
@@ -87,19 +113,22 @@ class AWSInteraction:
                 k.set_acl(permission)
                 if debug: print "[uploaded]",
         if debug: print ""
-        return k
 
-    def uploadS3_path(self, dir, recursive=True, **kwargs):
+    def uploadS3_path(self, dir=".", recursive=True, **kwargs):
         """Uploads a path (and its contents) to S3
 
         Args:
             dir: the directory to be inspected
+                default: the current directory (also known as ".")
             recursive: allows recursive searching of directory
         Returns: No current return.
         Raises: No current Error handling.
         """
         for x in os.listdir(dir):
-            obj = "{dir}/{file}".format(dir=dir, file=x)
+            if dir == ".":
+                obj = x
+            else:
+                obj = "{dir}/{file}".format(dir=dir, file=x)
             if os.path.isfile(obj):
                 self.uploadS3(file=obj, **kwargs)
             elif recursive:

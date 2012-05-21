@@ -14,6 +14,10 @@ class TestBotoWrap(unittest.TestCase):
         os.system("touch tempDIRtemp/file2.test")
         os.system("mkdir tempDIRtemp/DIR")
         os.system("touch tempDIRtemp/DIR/file3.test")
+        self.key1 = self.aws.b.new_key("key1.test")
+        self.key1.set_contents_from_filename("file.test")
+        self.key2 = self.aws.b.new_key("key/key2.test")
+        self.key2.set_contents_from_filename("file.test")
 
     def tearDown(self):
         os.system("rm file.test")
@@ -22,6 +26,8 @@ class TestBotoWrap(unittest.TestCase):
         os.system("rm tempDIRtemp/DIR/file3.test")
         os.system("rmdir tempDIRtemp/DIR")
         os.system("rmdir tempDIRtemp")
+        self.key1.delete()
+        self.key2.delete()
 
     def s3KeyCheck(self, key, bucket=None, remove=True, acl=None):
         #easy test to see if a certain file exists
@@ -52,6 +58,28 @@ class TestBotoWrap(unittest.TestCase):
         # remove the key
         key.delete()
 
+    def test_downloadS3(self):
+        #default file
+        self.aws.downloadS3("key1.test")
+        #default file under a folder key
+        self.aws.downloadS3("key/key2.test")
+        #default file under a path
+        self.aws.downloadS3("key2.test", path="key")
+        #change default file name
+        self.aws.downloadS3("key1.test", file="key1.testy")
+        self.aws.downloadS3("key/key2.test", file="key2.testy")
+        self.assertTrue(os.path.isfile("key/key2.test"))
+        self.assertTrue(os.path.isfile("key1.test"))
+        self.assertTrue(os.path.isfile("key2.test"))
+        self.assertTrue(os.path.isfile("key1.testy"))
+        self.assertTrue(os.path.isfile("key2.testy"))
+        os.system("rm -rf key")
+        os.system("rm key1.test")
+        os.system("rm key2.test")
+        os.system("rm key1.testy")
+        os.system("rm key2.testy")
+        # TODO(ron): override permissions?  what's intuitive?
+
     def test_uploadS3(self):
         # default settings
         self.aws.uploadS3("file.test")
@@ -73,20 +101,27 @@ class TestBotoWrap(unittest.TestCase):
         self.aws.uploadS3("file.test", path="smetrics_test/test", 
                                        key="file.test")
         self.assertTrue(self.s3KeyCheck("smetrics_test/test/file.test"))
-        self.aws.uploadS3("file.test", key="smetrics_test/file.test")
-        self.assertTrue(self.s3KeyCheck("smetrics_test/file.test"))
+        self.aws.uploadS3("file.test", key="smetrics_test/file.test/test")
+        self.assertTrue(self.s3KeyCheck("smetrics_test/file.test/test"))
         # change of permission
         # TODO (ron): test for change of permission
         #self.aws.uploadS3("file.test", permission="private")
         #self.assertTrue(self.s3KeyCheck("file.test", acl="private"))
 
     def test_uploadS3_path(self):
-        # test generic file load
+        # test generic file load (3 files)
+        b = self.aws.s3.create_bucket(self.aws.bucket)
         self.aws.uploadS3_path("tempDIRtemp")
+        k = b.get_all_keys()
+        self.assertEqual(len(k), 5) #test, has 5
+        for x in k: x.delete()      #delete
 
         # test if from default path
         os.chdir("tempDIRtemp")
         self.aws.uploadS3_path()
+        k = b.get_all_keys()
+        self.assertEqual(len(k), 3)
+        for x in k: x.delete()
         os.chdir("..")
 
 if __name__ == '__main__':

@@ -26,7 +26,7 @@ import boto
 import boto.ec2
 import re
 import os
-
+import sys
 
 class BotoWrap:
 
@@ -44,7 +44,7 @@ class BotoWrap:
         elif bucket == "new": self.bucket = "smetrics_" + str(time.time())
         else: self.bucket = bucket        
         self.s3 = boto.connect_s3()	
-        self.key = None
+        self.b = self.s3.create_bucket(self.bucket)
 
     def getS3key(self, key, bucket=None):
         """Get corresponding S3 key
@@ -59,6 +59,62 @@ class BotoWrap:
         b = self.s3.create_bucket(bucket)
         k = b.get_key(key)
         return k
+
+    def downloadS3(self, key, file=None, bucket=None, path=None,
+                   debug=False, override=False):
+        """Download a file from AWS to the local server
+
+        Args:
+            key: the location of the file on S3.  
+            file: the file to be transferred
+                default: to be the same as key.
+            bucket: specified bucket name.
+                default: smetrics_default
+            path: a location outside of the root directory (for key)
+            permission: sets the ACL
+                default: authenticated-read
+                other options: public-read, public-read-write, private
+            override: allow files to be overwritten?  
+                otherwise check size/time before overwritting happens
+
+        Returns: key associated with upload
+        Raises: No current Error handling.
+        """
+        def overrideIt(k):
+            # file worth overriding?
+            # override and file should be static global variables
+            if override: return True 
+            if not k: return False
+            if not k.exists(): return False
+            if not os.path.isfile(file): return True
+            #sequence makes a difference here..
+            if (str(os.path.getsize(file)) != k.get_metadata("size") or \
+                str(os.path.getmtime(file)) < k.get_metadata("time")):
+                return True
+            return False
+
+        # TODO(ron): if key contains invalid characters (unicode). 
+        #            that creates problems with rendering buckets.  deal!
+        if not file: file = key
+        if not bucket: 
+            bucket = self.bucket
+        if path:
+            key = "{path}/{key}".format(path=path, key=key)
+           
+        if debug: print "S3:", bucket, file, key,
+        b = self.s3.get_bucket(bucket)
+        k = b.get_key(key)
+
+        if overrideIt(k):
+            #get cwd of file
+            file_cwd = "/".join(file.split("/")[0:-1])
+            #blank file_cwd means on root path.  this is OK
+            if file_cwd and not os.path.exists(file_cwd):
+                os.makedirs(file_cwd)
+            k = b.new_key(key)
+            k.get_contents_to_filename(file)
+            if debug: print "[downloaded]",
+        if debug: print ""
 
     def uploadS3(self, file, key=None, bucket=None, path=None,
                  permission="authenticated-read", debug=False, override=False):

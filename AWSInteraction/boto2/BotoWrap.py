@@ -105,10 +105,14 @@ class BotoWrap:
             if not k.exists(): return False
             if not os.path.isfile(file): return True
             #sequence makes a difference here..
-            #time zone makes this challenging..
-            kTime = time.mktime(time.strptime(
-                         k.last_modified, "%a, %d %b %Y %H:%M:%S %Z"))
+            try:
+                kTime = time.mktime(time.strptime(
+                             k.last_modified, "%Y-%m-%dT%H:%M:%S.000Z"))
+            except:
+                kTime = time.mktime(time.strptime(
+                             k.last_modified[:-4], "%a, %d %b %Y %H:%M:%S"))
             kSize = k.size
+            print os.path.getmtime(file), kTime
             if os.path.getsize(file) != kSize and \
                os.path.getmtime(file) < kTime:
                 return True
@@ -177,8 +181,12 @@ class BotoWrap:
             if not k: return True
             if not k.exists(): return True
             # if size or time parameters change or key doesn't exist
-            kTime = time.mktime(time.strptime(
-                         k.last_modified[:-4], "%a, %d %b %Y %H:%M:%S"))
+            try:
+                kTime = time.mktime(time.strptime(
+                             k.last_modified, "%Y-%m-%dT%H:%M:%S.000Z"))
+            except:
+                kTime = time.mktime(time.strptime(
+                             k.last_modified[:-4], "%a, %d %b %Y %H:%M:%S"))
             kSize = k.size
             if os.path.getsize(file) != kSize or \
                os.path.getmtime(file) > kTime:

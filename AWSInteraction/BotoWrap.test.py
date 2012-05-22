@@ -14,9 +14,9 @@ class TestBotoWrap(unittest.TestCase):
         os.system("touch tempDIRtemp/file2.test")
         os.system("mkdir tempDIRtemp/DIR")
         os.system("touch tempDIRtemp/DIR/file3.test")
-        self.key1 = self.aws.b.new_key("key1.test")
+        self.key1 = self.aws.bucket.new_key("key1.test")
         self.key1.set_contents_from_filename("file.test")
-        self.key2 = self.aws.b.new_key("key/key2.test")
+        self.key2 = self.aws.bucket.new_key("key/key2.test")
         self.key2.set_contents_from_filename("file.test")
 
     def tearDown(self):
@@ -31,10 +31,8 @@ class TestBotoWrap(unittest.TestCase):
 
     def s3KeyCheck(self, key, bucket=None, remove=True, acl=None):
         #easy test to see if a certain file exists
-        if not bucket:
-            bucket = self.aws.bucket
-        b = self.aws.s3.create_bucket(bucket)
-        k = b.get_key(key)
+        bucket = self.aws.getBucket(bucket)
+        k = bucket.get_key(key)
         if not k:
             return False
         if not k.exists():
@@ -80,6 +78,10 @@ class TestBotoWrap(unittest.TestCase):
         os.system("rm key2.testy")
         # TODO(ron): override permissions?  what's intuitive?
 
+    def test_downloadS3_path(self):
+        # TODO(ron): 
+        pass
+
     def test_uploadS3(self):
         # default settings
         self.aws.uploadS3("file.test")
@@ -110,16 +112,15 @@ class TestBotoWrap(unittest.TestCase):
 
     def test_uploadS3_path(self):
         # test generic file load (3 files)
-        b = self.aws.s3.create_bucket(self.aws.bucket)
         self.aws.uploadS3_path("tempDIRtemp")
-        k = b.get_all_keys()
+        k = self.aws.bucket.get_all_keys()
         self.assertEqual(len(k), 5) #test, has 5
         for x in k: x.delete()      #delete
 
         # test if from default path
         os.chdir("tempDIRtemp")
         self.aws.uploadS3_path()
-        k = b.get_all_keys()
+        k = self.aws.bucket.get_all_keys()
         self.assertEqual(len(k), 3)
         for x in k: x.delete()
         os.chdir("..")

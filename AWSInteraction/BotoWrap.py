@@ -22,6 +22,7 @@
 #  
 
 import time
+import datetime
 import boto
 import boto.ec2
 import re
@@ -29,6 +30,10 @@ import os
 import sys
 
 class BotoWrap:
+    """Global variables:
+        s3 - S3 connection
+        bucket - S3 bucket
+    """
 
     def __init__(self, bucket=None):
         """ 
@@ -36,15 +41,30 @@ class BotoWrap:
             bucket: if bucket exists w/o permission, raises boto error.
                 "new" means create new folder (smetrics_x) | x=time
                 default: smetrics_default
-
-        Returns: No current return.
-        Raises: No current Error handling.
         """
-        if not bucket: self.bucket = "smetrics_default"
-        elif bucket == "new": self.bucket = "smetrics_" + str(time.time())
-        else: self.bucket = bucket        
         self.s3 = boto.connect_s3()	
-        self.b = self.s3.create_bucket(self.bucket)
+        if not bucket: bucket = "smetrics_default"
+        elif bucket == "new": bucket = "smetrics_" + str(time.time())
+        self.setBucket(bucket)
+
+    def setBucket(self, bucket):
+        """set Bucket
+        Args:
+            bucket: name of the bucket to change
+        Returns: bucket object
+        """
+        self.bucket = self.s3.create_bucket(bucket)
+
+    def getBucket(self, bucket=None, set=True):
+        """return Bucket
+        Args:
+            bucket: name of the bucket to fetch
+        Returns: bucket object (default is default bucket)
+        """
+        if bucket:
+            return self.s3.create_bucket(bucket)
+        else:
+            return self.bucket
 
     def getS3key(self, key, bucket=None):
         """Get corresponding S3 key
@@ -55,9 +75,7 @@ class BotoWrap:
 
         Returns: key for further manipulations
         """
-        if not bucket: bucket = self.bucket
-        b = self.s3.create_bucket(bucket)
-        k = b.get_key(key)
+        k = self.getBucket(bucket).get_key(key)
         return k
 
     def downloadS3(self, key, file=None, bucket=None, path=None,
@@ -88,22 +106,22 @@ class BotoWrap:
             if not k.exists(): return False
             if not os.path.isfile(file): return True
             #sequence makes a difference here..
-            if (str(os.path.getsize(file)) != k.get_metadata("size") or \
-                str(os.path.getmtime(file)) < k.get_metadata("time")):
+            kTime = time.mktime(time.strptime(k.last_modified, "%Y-%m-%dT%H:%M:%S.000Z"))
+            kSize = k.size
+            if os.path.getsize(file) != kSize and \
+               os.path.getmtime(file) < kTime:
                 return True
             return False
 
         # TODO(ron): if key contains invalid characters (unicode). 
         #            that creates problems with rendering buckets.  deal!
         if not file: file = key
-        if not bucket: 
-            bucket = self.bucket
+        bucket = self.getBucket(bucket)
         if path:
             key = "{path}/{key}".format(path=path, key=key)
            
-        if debug: print "S3:", bucket, file, key,
-        b = self.s3.get_bucket(bucket)
-        k = b.get_key(key)
+        if debug: print "S3:", file, key,
+        k = self.bucket.get_key(key)
 
         if overrideIt(k):
             #get cwd of file
@@ -111,10 +129,25 @@ class BotoWrap:
             #blank file_cwd means on root path.  this is OK
             if file_cwd and not os.path.exists(file_cwd):
                 os.makedirs(file_cwd)
-            k = b.new_key(key)
+            k = bucket.new_key(key)
             k.get_contents_to_filename(file)
             if debug: print "[downloaded]",
         if debug: print ""
+
+    def downloadS3_path(self, dir="", bucket=None, **kwargs):
+        """Downloads a path (and its contents) to S3
+
+        Args:
+            dir: the directory to be inspected
+                default: the current directory (also known as ".")
+            recursive: allows recursive searching of directory
+        Returns: No current return.
+        Raises: No current Error handling.
+        """
+    
+        cBucket = self.getBucket(bucket)
+        for k in cBucket.get_all_keys(prefix=dir):
+            self.downloadS3(key=k.name, bucket=bucket, **kwargs)
 
     def uploadS3(self, file, key=None, bucket=None, path=None,
                  permission="authenticated-read", debug=False, override=False):
@@ -143,26 +176,27 @@ class BotoWrap:
             if not k: return True
             if not k.exists(): return True
             # if size or time parameters change or key doesn't exist
-            if str(os.path.getsize(file)) != k.get_metadata("size") or \
-               str(os.path.getmtime(file)) > k.get_metadata("time"):
+            kTime = time.mktime(time.strptime(k.last_modified, "%Y-%m-%dT%H:%M:%S.000Z"))
+            kSize = k.size
+            if os.path.getsize(file) != kSize or \
+               os.path.getmtime(file) > kTime:
                 return True
             return False
 
         # TODO(ron): if key contains invalid characters (unicode). 
         #            that creates problems with rendering buckets.  deal!
         if not key: key = file
-        if not bucket: bucket = self.bucket
+        bucket = self.getBucket(bucket)
         if path: 
             key = "{path}/{file}".format(path=path, file=key)
 
         if debug: print "S3:", bucket, file, key,
         if os.path.isfile(file):
-            b = self.s3.create_bucket(bucket)
             # must get file to get its attributes
-            k = b.get_key(key)     
+            k = bucket.get_key(key)     
             # if size or time parameters change or key doesn't exist
             if overrideIt(k):
-                k = b.new_key(key)
+                k = bucket.new_key(key)
                 k.set_metadata("size", str(os.path.getsize(file)))
                 k.set_metadata("time", str(os.path.getmtime(file)))
                 k.set_contents_from_filename(file)
@@ -189,6 +223,8 @@ class BotoWrap:
                 self.uploadS3(file=obj, **kwargs)
             elif recursive:
                 self.uploadS3_path(dir=obj, recursive=recursive, **kwargs)
+
+    #===============================================================
 
     def checkSysStatus(self, instance):
         time.sleep(120)

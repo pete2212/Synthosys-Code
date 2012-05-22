@@ -49,10 +49,6 @@ class TestBotoWrap(unittest.TestCase):
         key = self.aws.getS3key("file.test")
         # make sure key is being returned
         self.assertEqual(str(type(key)), "<class 'boto.s3.key.Key'>")
-        # check metadata
-        self.assertEqual(key.get_metadata("size"), "0")
-        self.assertEqual(key.get_metadata("time"), 
-                         str(os.path.getmtime("file.test")))
         # remove the key
         key.delete()
 

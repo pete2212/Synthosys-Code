@@ -23,7 +23,7 @@
 #  
 from xml.dom.minidom import parse
 #import xml.etree.ElementTree as xml
-from elementtree.ElementTree import ElementTree, Element, SubElement, dump
+from elementtree.ElementTree import ElementTree, Element, SubElement, dump, tostring
 import sys
 import os
 import random
@@ -58,7 +58,7 @@ class XML_Interaction:
                 self.tree.write("outfile.xml")
 
 
-        def check_task( self ):
+        def check_task(self):
             """Check through xml data to handle pending tasks
 
                Args:
@@ -77,7 +77,7 @@ class XML_Interaction:
                    if child.tag == "status":
                        return child.text
 
-        def add_task( self, taskid, tasktype, folder=None ):
+        def add_task(self, taskid, tasktype, folder=None):
             """Add a task to the default xml task sheet
                 
                Args:
@@ -96,18 +96,18 @@ class XML_Interaction:
                     folder = self.solrFolder
 
                     root = self.tree.getroot()
-                    newTask = SubElement( root, "task" )
-                    newNode = Element( "status" )
+                    newTask = SubElement(root, "task")
+                    newNode = Element("status")
                     newNode.text = "pending"
-                    newTask.append( newNode )
+                    newTask.append(newNode)
 
-                    newNode = Element( "taskid" )
+                    newNode = Element("taskid")
                     newNode.text = str(taskid)
-                    newTask.append( newNode )
+                    newTask.append(newNode)
 
-                    newNode = Element( "directory" )
+                    newNode = Element("directory")
                     newNode.text = str(folder)
-                    newTask.append( newNode )
+                    newTask.append(newNode)
 
                     self.tree.write("outfile.xml")
 
@@ -131,13 +131,13 @@ class XML_Interaction:
                Raises:
                    None
             """
-            dir = os.path.expanduser( self.dataFolder )
-            if os.path.isdir( dir ):
-                d = os.listdir( dir )
+            dir = os.path.expanduser(self.dataFolder)
+            if os.path.isdir(dir):
+                d = os.listdir(dir)
                 for file in d:
 #                print "Parsing file %s" % file
-                    if os.path.isfile( dir + "/" + file  ):
-                        self.change_doc( dir, file )
+                    if os.path.isfile(dir + "/" + file):
+                        self.change_doc(dir, file)
                     else:
                         print dir+ "/" + file
 
@@ -156,40 +156,77 @@ class XML_Interaction:
             import elementtree.ElementTree as ET
             from elementtree.ElementTree import XML, fromstring, tostring
             
+            for val in info:
+                print val
             root = xml.Element("add")
             child = xml.Element("doc")
             root.append(child)
             
             field = xml.Element("field")
-            field.attrib["name"] = "date"
+            field.attrib["name"] = "id"
             field.text = info[0]
             child.append(field)
-            
+
             field = xml.Element("field")
-            field.attrib["name"] = "id"
+            field.attrib["name"] = "date"
             field.text = info[1]
             child.append(field)
             
             field = xml.Element("field")
             field.attrib["name"] = "Project_Summary"
-            field.text = info[3] 
+            field.text = info[2] 
             child.append(field)
             
             #only add status and full description if private
             if status == "private":
                 field = xml.Element("field")
-                field.attrib["name"] = "status"
-                field.text = info[2]
+                field.attrib["name"] = "Project_Description"
+                field.text = info[3]
                 child.append(field)
 
                 field = xml.Element("field")
-                field.attrib["name"] = "Project_Description"
+                field.attrib["name"] = "status"
                 field.text = info[4]
                 child.append(field)
+
+            return tostring(root, 'utf-8')
+
+        def pull_solr_info(self, file, data):
+            """Pulls solr information from xml document
+         
+               Args:  
+                   file: path and file name of xml file
+                   data: input data to be included in xml
             
-            return ElementTree.tostring(root, 'utf-8')
-            
-        def change_doc( self, path, name ):
+               Returns:
+                   Returns a utf-8 formatted xml string containing necessarily 
+                   solr inptu data
+
+               Raises:
+                   None
+             
+            """
+            import elementtree.ElementTree as ET
+
+            tree = ET.parse(file)
+            root = tree.getroot()
+
+            for ch in root.getiterator():
+                if not (ch.tag in record ): 
+                    record[ ch.tag ] = ch.text
+                    if ch.tag != "doc" and ch.tag != "add" and ch.tag != "DOCS" and ch.tag != "DOCUMENT":
+                        if ch.tag == "Section_Title" and (ch.text == "Project Description"):
+                            summary = True               
+                            tag_title = "Project_Description"
+                        elif summary == True:
+                            if ch.tag == "DRECONTENT":
+                                field = xml.Element("field")
+                                field.attrib["name"] = tag_title
+                                field.text = ch.text
+                                child.append(field)
+                                summary = False
+
+        def change_doc(self, path, name):
             """Modifies original formated document from NSF to fit Solr format
                
                Args:
@@ -225,7 +262,7 @@ class XML_Interaction:
                 child.append(field)
                 
                 random.seed()
-                priority = str( random.randint(0,4) )
+                priority = str(random.randint(0,4))
                 field = xml.Element("field")
                 field.attrib["name"] = "status"
                 field.text = priority
@@ -235,10 +272,10 @@ class XML_Interaction:
                 tag_title = ""
                 record = {}
                 for ch in root.getiterator():     
-                    if not (ch.tag in record ): #and ( record[ ch.tag ] == ch.text ) ) :
-                        record[ ch.tag ] = ch.text
+                    if not (ch.tag in record): #and ( record[ ch.tag ] == ch.text ) ) :
+                        record[ch.tag] = ch.text
                         if ch.tag != "doc" and ch.tag != "add" and ch.tag != "DOCS" and ch.tag != "DOCUMENT":
-                            if ch.tag == "Section_Title" and ( ch.text == "Project Summary" or ch.text == "Project Description" ):                                   
+                            if ch.tag == "Section_Title" and (ch.text == "Project Summary" or ch.text == "Project Description"):                                   
                                 summary = True
                                 if ch.text == "Project Summary":
                                     tag_title = "Project_Summary"

@@ -14,3 +14,18 @@ SOLRPRIPORT = 9000 #internal port for solr public instance
 SOLRPUBPORT = 9001 #internal port for solr private instance
 FSEARCH_PATH_LIST = "/home/dnewman/update/"
 FSEARCH_LOCAL = "/home/ptr/data/2012-05-15/"
+PDF_ARCHIVE = "/home/ptr/data/pdf_archive/"
+NWF_ARCHIVE = "/home/ptr/data/nwf_archive/"
+XML_ARCHIVE = "/home/ptr/data/xml_archive/"
+#SQL result defines
+NSF_ID = 0
+DD_DATE = 1
+status = 2
+#File extension search results
+DOC_FOUND = 0
+PDF_FOUND = 1 
+PDF_LOC = 2
+XML_FOUND = 3
+XML_LOC = 4
+NWF_FOUND = 5
+NWF_LOC = 6

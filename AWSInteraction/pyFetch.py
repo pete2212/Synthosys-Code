@@ -21,32 +21,6 @@
 #  MA 02110-1301, USA.
 #
 
-""" functional diagram
-   
-    Import_data:
-    existing data:
-        from database?
-            Verify_db;
-            Open db;
-            test with sample query and verify results
-            select fyear from prop;
-            sort list from high to low
-            for each year from start to finish  query all files:            
-               month = 1
-               while month < 13:                  
-                  select dd_month, fpropid, status from prop where month = init and fyear == year;)
-                  loc= locate_file( fpropid)
-                  if loc != False:
-                       add_id(propid, loc)
-            if month < 12
-                month += 1
-            else 
-                year += 1
-                month = 1
-
-
-"""
-
 import sys
 import pyFetchConf
 sys.path.append(pyFetchConf.CODE_PATH)
@@ -134,7 +108,7 @@ class ImportProp:
                         else:
                             proposal_missing +=1            
                     if result[0]:
-                       self.move_data(entry, found)
+                       self.move_found_data(entry, found)
 #                    time.sleep(1)
 #                self.move(entry)
 #                self.add_solr(entry)
@@ -155,13 +129,28 @@ class ImportProp:
            Raises:
                None
         """
+
         if not self.solr_db:
            self.solr_db = SQLite.SQLite(pyFetchConf.SOLR_DB_PATH)
         #solr_db.addSQL(entry, table="prop")
         print "Insert into vals into db[%s,%s,%s,%s,%s]"%(entry[0],entry[1],entry[2],entry[3],entry[4])
         self.solr_db.c.execute("insert into prop values (?,?,?,?,?)", entry)
         self.solr_db.commit() 
+ 
+    def remove_id_solr_db(self, value):
+        """Remove entry from solr database
 
+           Args:
+               entry: data entry to be removed from db
+        """
+        if not self.solr_db:
+            self.solr_db = SQLite.SQLite(pyFetchConf.SOLR_DB_PATH)
+
+        query = "delete from prop where nsf_id = %s" % value
+
+        self.solr_db.c.execute(query)
+
+ 
     def add_solr(self, entry):
         """Adds data to private or public and private database and mark location in DB
         
@@ -174,8 +163,9 @@ class ImportProp:
         Raises:
             None
         """
-        if solr_db == "": 
-            solr_db = SQLite.SQLite(pyFetchConf.SOLR_DB_PATH)
+        if not self.solr_db: 
+            self.solr_db = SQLite.SQLite(pyFetchConf.SOLR_DB_PATH)
+
         if entry.status:
             port = pyFetchConf.PRPORT
             type = "private"
@@ -217,7 +207,7 @@ class ImportProp:
             result = x.create_solr_doc(entry, status)
             print "new xml data:\n%s" % result
 
-    def move_data(self, entry, flocation):
+    def move_found_data(self, entry, flocation):
         """ To move data to new location and mark location in DB
  
         Args:
@@ -230,26 +220,39 @@ class ImportProp:
         Raises:
             None
         """
-        if loc_db == None:
-            loc_db = SQLite.SQLite(pyFetchConf.LOC_DB_PATH)
+        if self.loc_db == None:
+            self.loc_db = SQLite.SQLite(pyFetchConf.LOC_DB_PATH)
+             
 
-        date = entry.dd_date.split('/')
+        date = entry[pyFetchConf.DD_DATE].split('/')
+        print date
         month = date[0]
         year = date[2]
-
-        #TODO define PDF/XML/XMLWELLFORMED
-        #PDF
-        if entry[1]:
-            newfile = pyFetchConf.OPATH + "/pdf/" + entry.nsf_id
-            if os.path.isfile(entry[2]):
-                if not os.path.isfile(newfile):
-                    shutil.copy2(entry[2], newfile)
+        print "m[%s]y[%s]" %(month, year)
+        if flocation[pyFetchConf.DOC_FOUND]:
+        #pdf check
+            if flocation[pyFetchConf.PDF_FOUND]:
+                newfile = pyFetchConf.PDF_ARCHIVE + entry[pyFetchConf.NSF_ID] + ".pdf"
+                print "new f[%s]" % newfile
+                if (flocation[pyFetchConf.PDF_FOUND]
+		    and os.path.isfile(flocation[pyFetchConf.PDF_LOC])) :
+                    if not os.path.isfile(newfile):
+                        print "ifname[%s],ofname[%s]"%(flocation[pyFetchConf.PDF_LOC], newfile)
+                        shutil.copy2(flocation[pyFetchConf.PDF_LOC], newfile)
+			tar = "pdf_" + month + "_" + year + ".tar.gz"
+			self.add_to_tar(newfile, tar) 
+                    else:
+                        print "File already exists %s" % newfile
                 else:
-                    print "File already exists %s" % newfile
-            else:
-                print "File % not found" % entry.nsf_id
+                    print "File % not found" % entry[pyFetchConf.NSF_ID]
 
-       
+    
+    def add_to_tar(self, fname, tname):
+        """
+        """
+        tar = tarfile.open(tname, mode="a")
+        tar.add(tname)
+
     def get_prop(self, fname):
         #Located/pdf located/xml located/well formed located
         found = [False, False, False, False]
@@ -268,12 +271,12 @@ class ImportProp:
         found = [False, False, False, False]
 
         found = self.locate_prop(fname, pyFetchConf.FSEARCH_PATH_LIST) #search Dave's directory first
-        if not found:
+        if not found[0]:
             for x in os.listdir( pyFetchConf.FSEARCH_LOCAL ):
                 file = pyFetchConf.FSEARCH_LOCAL + x
                 if os.path.isfile(file):
                     if not file.find(fname) == -1:
-                        print "%s found at loc $s" %(fname, file)
+#                        print "%s found at loc $s" %(str(fname), str(file))
                         found[0] = True
                         if file[-3:] == "pdf":
                             found[1] = True
@@ -281,7 +284,7 @@ class ImportProp:
                         elif file[-3:] == "xml":
                             found[3] = True
                             found[4] = file
-                        elif file[-3:] == "NWF":
+                        elif file[-3:] == "nwf":
                             found[5] = True
                             found[6] = file
                         else:
@@ -323,7 +326,7 @@ class ImportProp:
                     
             else:
                 if x == "txt" or x == "txt_update":
-                    return
+                    return found
                 file += "/"
                 self.locate_prop(fname, file)
         return found 
@@ -337,9 +340,9 @@ class ImportProp:
 #               f=tar.extractfile(item)
 #               f.write(pyFetchConf.OPATH + fname )
       
-i = ImportProp()
-i.import_data()
-i.query_by_year()
+#i = ImportProp()
+#i.import_data()
+#i.query_by_year()
 #nsf_id/dd_date/summary/description
 #entry = ["11/10/1981", "11527", "Status field", "summary field", "description field"]
 #entry = ["11111", "11/10/1981", "summary", "description", "status"]

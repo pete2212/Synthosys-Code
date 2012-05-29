@@ -27,25 +27,29 @@ from xml_parser import XML_Interaction
 import time
 
 def main():
-	
-	taskid = 0
-	xParser = XML_Interaction()
-	xParser.add_task( taskid, "processSolr" )	
-	i = 0
-	time.sleep(10)
-	xParser.update_task(0, "processed")
-	status = "idle"
-	while status != "shutdown":
-		time.sleep(5)		
-		status = xParser.check_task()
-		print str(status)
-		i = i + 1
-		if i == 3:
-			xParser.update_task(0, "shutdown")
-			
-	return 0
+        """
+        taskid = 0
+        xParser = XML_Interaction()
+        xParser.add_task( taskid, "processSolr" )       
+        i = 0
+        time.sleep(10)
+        xParser.update_task(0, "processed")
+        status = "idle"
+        while status != "shutdown":
+                time.sleep(5)           
+                status = xParser.check_task()
+                print str(status)
+                i = i + 1
+                if i == 3:
+                        xParser.update_task(0, "shutdown")
+        """
+        xParser = XML_Interaction()
+
+        xParser.convert_XML()
+
+        return 0
 
 
 if __name__ == '__main__':
-	main()
+        main()
 

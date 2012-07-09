@@ -30,10 +30,19 @@ class FetchTestCase(unittest.TestCase):
         #generate 3 files for testing locate function
         self.xmlname = self.WRITE_PATH + self.XML_EXT_NAME
         self.touch(self.xmlname)
+        f = open(self.xmlname, 'w')
+        f.write("xml_test")
+        f.close()
         self.nwfname = self.WRITE_PATH + self.NWF_EXT_NAME
         self.touch(self.nwfname)
+        f = open(self.nwfname, 'w')
+        f.write("nwf_test")
+        f.close()
         self.pdfname = self.WRITE_PATH + self.PDF_EXT_NAME
         self.touch(self.pdfname)
+        f = open(self.pdfname, 'w')
+        f.write("pdf_test")
+        f.close()
 #self.addTest(FetchTestCase('test_locate'))        
         
     def touch(self, fname):
@@ -78,7 +87,11 @@ class FetchTestCase(unittest.TestCase):
         pdfname = self.WRITE_PATH + self.PDF_EXT_NAME
         if os.path.isfile(pdfname):
             os.remove(pdfname)
+        print "removing pdf output file"
+        if os.path.isfile("/home/ptr/data/pdf_archive/11111.pdf"):
+            os.remove("/home/ptr/data/pdf_archive/11111.pdf")
 
+       
     def test_solr_db_add(self):
         """Attempts to push a message to sql database to verify format
         """
@@ -94,6 +107,14 @@ class FetchTestCase(unittest.TestCase):
 #        print "push too many entries for testing"
 #        entry = ["11111", "11/10/1981", "summary", "description", "status", "baddata" ]
 #        self.test.add_solr_db(entry)
+
+    def test_solr_srv_add(self):
+        #nsf_id, date, "summary", "description", "status"
+        entry_type = "memory" 
+        self.test.remove_id_solr_db("22222")
+        entry = ["22222", "10/21/1981", "summary", "description", "status"]
+        self.test.add_solr_entry(entry, entry_type)
+#        self.test.add_solr_file(fname)
 
     def in_memory_xml(self):
         """
@@ -120,6 +141,9 @@ class FetchTestCase(unittest.TestCase):
                 
         self.test.move_found_data(entry, location)
 
+    def build_solr_entry(self):
+#self.test.pull_solr_info()
+        pass
 
 if __name__ == '__main__':
     unittest.main()
